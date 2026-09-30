@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f3f5f7" id="theme-color" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <title>刷题中心</title>
+    <script>
+      (() => {
+        const themeKey = "relax1000_share_theme_v1";
+        let savedTheme = "";
+        try {
+          savedTheme = localStorage.getItem(themeKey) || "";
+        } catch (_) {}
+        const systemTheme =
+          window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        const theme = savedTheme === "dark" || savedTheme === "light" ? savedTheme : systemTheme;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="favicon.svg" alt="" />
+          </span>
+          <div class="brand-copy">
+            <h1 id="brand-title">刷题中心</h1>
+            <span id="brand-sub">选择一个题库开始</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <nav class="location-nav" aria-label="主要页面">
+            <button
+              type="button"
+              class="btn location-nav-btn is-current"
+              id="btn-banks"
+              aria-current="page"
+            >
+              <span class="location-nav-icon" aria-hidden="true">▦</span>
+              <span>全部题库</span>
+            </button>
+            <button
+              type="button"
+              class="btn location-nav-btn"
+              id="btn-home"
+              aria-label="题库首页，先选择一个题库"
+              title="先选择一个题库"
+              disabled
+            >
+              <span class="location-nav-icon" aria-hidden="true">⌂</span>
+              <span>题库首页</span>
+            </button>
+          </nav>
+          <button type="button" class="btn btn-ghost" id="btn-theme" aria-pressed="false">
+            ☾ 暗色
+          </button>
+          <button type="button" class="btn btn-ghost hidden" id="btn-reset" title="清空当前题库的本地进度">
+            清空进度
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content">
+        <div
+          class="storage-warning"
+          id="storage-warning"
+          hidden
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        ></div>
+
+        <!-- 题库选择 -->
+        <section id="view-banks" aria-labelledby="banks-title">
+          <div class="page-title">
+            <h2 id="banks-title" tabindex="-1">全部题库</h2>
+            <span class="page-title-note" id="banks-note"></span>
+          </div>
+          <div class="bank-grid" id="bank-grid"></div>
+          <p class="bank-tip">
+            每个题库独立记录进度，切换题库不会打乱当前学习记录。
+          </p>
+        </section>
+
+        <!-- 题库首页 -->
+        <section id="view-home" class="hidden" aria-labelledby="home-title">
+          <h2 class="visually-hidden" id="home-title" tabindex="-1">做题首页</h2>
+          <div class="card home-hero">
+            <div class="home-hero-copy">
+              <span class="eyebrow">每日一句</span>
+              <h2 id="home-greeting" class="quote-en">Talk is cheap. Show me the code.</h2>
+              <p id="home-nudge" class="quote-zh">空谈无益，给我看代码。</p>
+              <p id="home-quote-author" class="quote-author">— Linus Torvalds</p>
+            </div>
+            <div class="home-hero-row">
+              <div class="stat-row" id="home-stats"></div>
+              <div class="home-actions">
+                <button type="button" class="btn btn-primary" id="btn-continue">继续上次</button>
+                <button type="button" class="btn" id="btn-wrong">错题本</button>
+                <button type="button" class="btn" id="btn-notes">笔记本</button>
+                <button type="button" class="btn hidden" id="btn-methods">通法库</button>
+              </div>
+            </div>
+          </div>
+          <section class="card accuracy-card" aria-labelledby="accuracy-title">
+            <div class="accuracy-heading">
+              <h2 id="accuracy-title">正确率汇总</h2>
+              <p>按每题最新作答统计</p>
+            </div>
+            <div class="accuracy-summary" id="accuracy-summary"></div>
+          </section>
+          <div class="subject-grid" id="subject-grid"></div>
+        </section>
+
+        <!-- 章节列表 -->
+        <section id="view-chapters" class="hidden" aria-labelledby="chapter-title">
+          <div class="page-title">
+            <h2 id="chapter-title" tabindex="-1">章节</h2>
+            <button type="button" class="btn" id="btn-back-chapters">返回首页</button>
+          </div>
+          <div class="chapter-list" id="chapter-list"></div>
+        </section>
+
+        <!-- 通法库 -->
+        <section id="view-methods" class="hidden" aria-labelledby="methods-title">
+          <div class="page-title">
+            <h2 id="methods-title" tabindex="-1">通法库</h2>
+            <button type="button" class="btn" id="btn-back-methods">返回首页</button>
+          </div>
+          <div class="method-filter" id="method-filter" role="group" aria-label="按类别筛选通法"></div>
+          <div class="method-list" id="method-list"></div>
+        </section>
+
+        <!-- 做题 -->
+        <section id="view-quiz" class="hidden" aria-labelledby="quiz-title">
+          <h2 class="visually-hidden" id="quiz-title" tabindex="-1">答题</h2>
+          <div class="quiz-header">
+            <div class="quiz-meta-row">
+              <div class="quiz-meta" id="quiz-meta"></div>
+              <button type="button" class="btn btn-ghost hidden" id="btn-back-to-chapters">
+                返回章节
+              </button>
+            </div>
+            <div class="quiz-progress">
+              <div class="progress-bar" id="quiz-progress-bar">
+                <i
+                  id="quiz-progress-fill"
+                  role="progressbar"
+                  aria-label="做题进度"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="0"
+                ></i>
+              </div>
+              <div class="quiz-progress-text" id="quiz-progress-text"></div>
+            </div>
+          </div>
+
+          <div class="card quiz-card">
+            <div class="question-guide">
+              <span id="question-guide-text">选出最合适的一项</span>
+              <span class="question-guide-tools">
+                <span class="shortcut-hint" aria-hidden="true">键盘 A–D 也可作答</span>
+                <button type="button" class="btn btn-ghost btn-ai" id="btn-ai">AI 讲解</button>
+              </span>
+            </div>
+            <div class="stem" id="stem"></div>
+            <div class="method-hint hidden" id="method-hint"></div>
+            <div class="options" id="options"></div>
+            <div
+              class="feedback hidden"
+              id="feedback"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            ></div>
+            <div class="post-answer hidden" id="post-answer">
+              <span id="post-answer-hint">理解以后再继续，记得更牢。</span>
+              <button type="button" class="btn btn-primary" id="btn-next-answer">
+                下一题 <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <div
+              class="explanation hidden"
+              id="explanation"
+              role="region"
+              aria-labelledby="explanation-title"
+            >
+              <div class="explanation-heading">
+                <div>
+                  <span class="section-kicker">答案拆解</span>
+                  <h4 id="explanation-title">解析</h4>
+                </div>
+                <div class="explanation-tools">
+                  <span class="explanation-meta" id="explanation-meta"></span>
+                  <button
+                    type="button"
+                    class="btn btn-ghost hidden"
+                    id="btn-explanation-toggle"
+                    aria-controls="explanation-body"
+                    aria-expanded="true"
+                  >
+                    收起解析
+                  </button>
+                </div>
+              </div>
+              <div class="explanation-preview hidden" id="explanation-preview"></div>
+              <div class="body" id="explanation-body"></div>
+            </div>
+            <div class="note-panel hidden" id="note-panel" aria-labelledby="note-heading">
+              <div class="note-header">
+                <h4 id="note-heading">我的笔记</h4>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  id="btn-note-toggle"
+                  aria-controls="note-body"
+                  aria-expanded="false"
+                >
+                  写笔记
+                </button>
+              </div>
+              <div class="note-snippet hidden" id="note-snippet"></div>
+              <div class="note-body hidden" id="note-body">
+                <div class="note-tabs" role="tablist" aria-label="笔记编辑与预览">
+                  <button
+                    type="button"
+                    class="note-tab active"
+                    id="btn-note-edit"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="note-edit-panel"
+                    tabindex="0"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    class="note-tab"
+                    id="btn-note-preview-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="note-preview"
+                    tabindex="-1"
+                  >
+                    预览
+                  </button>
+                </div>
+                <div id="note-edit-panel" role="tabpanel" aria-labelledby="btn-note-edit">
+                  <label class="visually-hidden" for="note-input">笔记内容</label>
+                  <textarea
+                    id="note-input"
+                    class="note-input"
+                    rows="7"
+                    maxlength="10000"
+                    placeholder="可选：记录易错点、推导或总结…&#10;支持 Markdown 与公式，例如 **重点**、$O(n)$、$$\sum_{i=1}^{n} i$$"
+                    spellcheck="true"
+                  ></textarea>
+                </div>
+                <div
+                  id="note-preview"
+                  class="note-preview hidden"
+                  role="tabpanel"
+                  aria-labelledby="btn-note-preview-tab"
+                  aria-live="polite"
+                ></div>
+                <div class="note-toolbar">
+                  <span
+                    class="note-hint"
+                    id="note-status"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    >自动保存 · Markdown / $公式$</span
+                  >
+                  <button type="button" class="btn btn-ghost" id="btn-note-clear">清空</button>
+                </div>
+              </div>
+            </div>
+            <div class="quiz-footer">
+              <button type="button" class="btn" id="btn-prev" aria-keyshortcuts="P ArrowLeft">
+                上一题
+              </button>
+              <button type="button" class="btn btn-primary" id="btn-next" aria-keyshortcuts="N ArrowRight">
+                下一题
+              </button>
+              <button type="button" class="btn hidden" id="btn-retry" title="清除本题作答并重新选择">
+                重做本题
+              </button>
+              <div class="spacer"></div>
+              <div class="jump-box">
+                <label for="jump-input">跳转</label>
+                <input type="number" id="jump-input" min="1" />
+                <button type="button" class="btn" id="btn-jump">前往</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- AI 讲解 -->
+    <div class="ai-overlay" id="ai-overlay" hidden></div>
+    <aside class="ai-panel" id="ai-panel" aria-labelledby="ai-panel-title" aria-hidden="true" hidden>
+      <header class="ai-panel-head">
+        <div>
+          <h2 id="ai-panel-title">AI 讲解</h2>
+          <p class="ai-panel-sub" id="ai-question-label">未选择题目</p>
+        </div>
+        <div class="ai-head-actions">
+          <button type="button" class="btn btn-ghost" id="btn-ai-settings">设置</button>
+          <button type="button" class="btn btn-ghost" id="btn-ai-clear">清空对话</button>
+          <button type="button" class="btn btn-ghost" id="btn-ai-close" aria-label="关闭 AI 讲解">✕</button>
+        </div>
+      </header>
+      <div class="ai-error hidden" id="ai-error" role="alert"></div>
+      <div class="ai-messages" id="ai-messages" role="log" aria-live="polite"></div>
+      <form class="ai-composer" id="ai-composer">
+        <label class="visually-hidden" for="ai-input">向 AI 提问</label>
+        <textarea
+          id="ai-input"
+          rows="2"
+          maxlength="4000"
+          placeholder="就这道题提问，例如：为什么要这样构造辅助函数？"
+        ></textarea>
+        <div class="ai-composer-row">
+          <span class="ai-composer-status" id="ai-status">本题上下文已就绪</span>
+          <button type="submit" class="btn btn-primary" id="btn-ai-send">发送</button>
+        </div>
+      </form>
+    </aside>
+
+    <div class="ai-settings" id="ai-settings" hidden role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
+      <form class="ai-settings-card" id="ai-settings-form">
+        <h3 id="ai-settings-title">AI 接口设置</h3>
+        <p class="ai-settings-note">
+          填服务商地址和 API Key，点「获取模型」再从列表里挑一个就能用。Key 只存在这台电脑的浏览器里。
+        </p>
+
+        <div class="ai-field">
+          <span class="ai-field-label">
+            <label for="ai-base-url">① 服务商地址</label>
+            <span class="ai-field-hint">通常以 /v1 结尾</span>
+          </span>
+          <input
+            type="text"
+            id="ai-base-url"
+            list="ai-baseurl-presets"
+            placeholder="https://api.deepseek.com/v1"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <datalist id="ai-baseurl-presets">
+            <option value="https://api.deepseek.com/v1">DeepSeek</option>
+            <option value="https://api.siliconflow.cn/v1">硅基流动</option>
+            <option value="https://api.openai.com/v1">OpenAI</option>
+            <option value="https://open.bigmodel.cn/api/paas/v4">智谱 GLM</option>
+            <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">通义千问</option>
+            <option value="https://ark.cn-beijing.volces.com/api/v3">豆包 / 火山方舟</option>
+            <option value="http://127.0.0.1:11434/v1">Ollama 本机</option>
+          </datalist>
+        </div>
+
+        <div class="ai-field">
+          <span class="ai-field-label">
+            <label for="ai-api-key">② API Key</label>
+            <button type="button" class="ai-link-btn" id="btn-ai-key-visible">显示</button>
+          </span>
+          <input
+            type="password"
+            id="ai-api-key"
+            placeholder="sk-…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <div class="ai-field">
+          <span class="ai-field-label">
+            <label for="ai-model-picker">③ 模型</label>
+            <span class="ai-field-hint" id="ai-model-hint">先填好上面两项</span>
+          </span>
+          <div class="ai-model-row">
+            <select id="ai-model-picker" disabled>
+              <option value="">尚未获取模型列表</option>
+            </select>
+            <button type="button" class="btn" id="btn-ai-models">获取模型</button>
+          </div>
+          <input
+            type="search"
+            id="ai-model-filter"
+            class="ai-model-filter hidden"
+            placeholder="筛选模型，例如 deepseek"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <label class="ai-model-manual">
+            <span>实际使用</span>
+            <input
+              type="text"
+              id="ai-model"
+              placeholder="模型名，也可以手动填"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
+
+        <div class="ai-field ai-prompt-field">
+          <span class="ai-field-label">
+            <label for="ai-system-prompt">④ 系统提示词（可选）</label>
+            <span class="ai-field-hint">保留当前题目上下文</span>
+          </span>
+          <textarea
+            id="ai-system-prompt"
+            rows="6"
+            placeholder="例如：先分析我的思路，再给下一步提示。"
+            spellcheck="true"
+          ></textarea>
+        </div>
+
+        <label class="ai-check">
+          <input type="checkbox" id="ai-remember-key" />
+          <span>把 Key 记在这台电脑（不勾选则只在本次浏览器会话有效）</span>
+        </label>
+        <div class="ai-settings-status" id="ai-settings-status"></div>
+        <div class="ai-settings-actions">
+          <button type="button" class="btn" id="btn-ai-test">测试对话</button>
+          <div class="spacer"></div>
+          <button type="button" class="btn" id="btn-ai-settings-cancel">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="banks.js"></script>
+    <script defer src="vendor/katex/katex.min.js"></script>
+    <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
+    <script defer src="vendor/marked/marked.umd.js"></script>
+    <script defer src="vendor/dompurify/purify.min.js"></script>
+    <script defer src="ai.js"></script>
+    <script defer src="app.js"></script>
+  </body>
+</html>
